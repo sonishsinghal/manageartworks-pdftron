@@ -3,7 +3,6 @@ import * as THREE from "three";
 import { GLTFExporter } from "three/examples/jsm/exporters/GLTFExporter.js";
 import WebViewer from "@pdftron/webviewer";
 import "./App.css";
-import Popup from "reactjs-popup";
 import PreviewPopup, { Face } from "./components/PreviewPopup";
 import { Button, Modal } from "@mui/material";
 
