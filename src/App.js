@@ -4,16 +4,23 @@ import { GLTFExporter } from "three/examples/jsm/exporters/GLTFExporter.js";
 import WebViewer from "@pdftron/webviewer";
 import "./App.css";
 import Popup from "reactjs-popup";
+import PreviewPopup, { Face } from "./components/PreviewPopup";
+import { Button, Modal } from "@mui/material";
 
 function App() {
   const viewer = useRef(null);
   const [textures, setTextures] = useState([]);
+  const [approved, setApproved] = useState(0);
 
-  const PopupExample = ({ imageURL }) => (
-    <Popup trigger={<button> Trigger</button>} position="right center">
-      <img src={imageURL} alt="preview"></img>
-    </Popup>
-  );
+  const [openSnippet, setOpenSnippet] = useState(false);
+  const handleOpenSnippet = () => setOpenSnippet(true);
+  const handleCloseSnippet = () => setOpenSnippet(false);
+
+  const removeTexture = (index) => {
+    const copyOfT = [...textures];
+    setApproved(approved - 1);
+    setTextures(copyOfT.splice(index));
+  };
   useEffect(() => {
     // const downloadURI = (uri, name) => {
     //   const link = document.createElement("a");
@@ -33,16 +40,11 @@ function App() {
       viewer.current
     ).then((instance) => {
       // sniping tool code
-      const {
-        docViewer,
-        Annotations,
-        Tools,
-        iframeWindow,
-        annotManager,
-      } = instance;
+      const { docViewer, Annotations, Tools, iframeWindow, annotManager } =
+        instance;
 
-      const createSnipTool = function() {
-        const SnipTool = function() {
+      const createSnipTool = function () {
+        const SnipTool = function () {
           Tools.RectangleCreateTool.apply(this, arguments);
           this.defaults.StrokeColor = new Annotations.Color("#F69A00");
           this.defaults.StrokeThickness = 2;
@@ -102,12 +104,12 @@ function App() {
         // console.log(widthList, heightList);
 
         //popup to check the image url, wont be rendered yet
-        PopupExample({ imageURL });
 
         //add to texture state if the snippet is correct
         setTextures((pre) => [...pre, imageURL]);
+        handleOpenSnippet();
 
-        //downloadURI(copyCanvas.toDataURL(), "sample.jpeg");
+        // downloadURI(copyCanvas.toDataURL(), "sample.jpeg");
 
         annotManager.deleteAnnotation(annotation);
       });
@@ -127,7 +129,7 @@ function App() {
       };
       gltfExporter.parse(
         input,
-        function(result) {
+        function (result) {
           if (result instanceof ArrayBuffer) {
             saveArrayBuffer(result, "scene.glb");
           } else {
@@ -136,7 +138,7 @@ function App() {
             saveString(output, "scene.gltf");
           }
         },
-        function(error) {
+        function (error) {
           console.log("An error happened during parsing", error);
         },
         options
@@ -172,15 +174,13 @@ function App() {
       maxTextureSize: 4096,
     };
 
-    await init();
+    init();
 
     async function init() {
       scene1 = new THREE.Scene();
       scene1.name = "Scene1";
 
-      // ---------------------------------------------------------------------
       // Perspective Camera
-      // ---------------------------------------------------------------------
       camera = new THREE.PerspectiveCamera(
         45,
         window.innerWidth / window.innerHeight,
@@ -188,20 +188,15 @@ function App() {
         2000
       );
       camera.position.set(600, 400, 0);
-
       camera.name = "PerspectiveCamera";
       scene1.add(camera);
 
-      // ---------------------------------------------------------------------
       // Ambient light
-      // ---------------------------------------------------------------------
       const ambientLight = new THREE.AmbientLight(0xffffff, 0.2);
       ambientLight.name = "AmbientLight";
       scene1.add(ambientLight);
 
-      // ---------------------------------------------------------------------
       // DirectLight
-      // ---------------------------------------------------------------------
       const dirLight = new THREE.DirectionalLight(0xffffff, 1);
       dirLight.target.position.set(0, 0, -1);
       dirLight.add(dirLight.target);
@@ -209,40 +204,61 @@ function App() {
       dirLight.name = "DirectionalLight";
       scene1.add(dirLight);
 
-      //custom texture on every side
-      const textureLoader = new THREE.TextureLoader();
-      const textureCubeCustom = [
-        new THREE.MeshBasicMaterial({
-          map: textureLoader.load(textures[0]),
-        }),
-        new THREE.MeshBasicMaterial({
-          map: textureLoader.load(textures[1]),
-        }),
-        new THREE.MeshBasicMaterial({
-          map: textureLoader.load(textures[2]),
-        }),
-        new THREE.MeshBasicMaterial({
-          map: textureLoader.load(textures[3]),
-        }),
-        new THREE.MeshBasicMaterial({
-          map: textureLoader.load(textures[4]),
-        }),
-        new THREE.MeshBasicMaterial({
-          map: textureLoader.load(textures[5]),
-        }),
-      ];
+      //get deminions
+      let x, y, z;
+      let areaMax = 0;
+      let areaMin = Infinity;
 
+      //loadTextures
+      let loadedTextures = [];
+      const loadTexture = async (i) => {
+        return new Promise((reslove) => {
+          let image = new Image();
+          image.src = textures[i];
+          image.onload = function () {
+            let texture = new THREE.Texture();
+            texture.needsUpdate = true;
+            texture.image = image;
+            const w = parseFloat(this.width);
+            const h = parseFloat(this.height);
+            let tempArea = w * h;
+            if (tempArea > areaMax) {
+              areaMax = tempArea;
+              x = w > h ? w : h;
+              y = w > h ? h : w;
+            }
+            if (tempArea < areaMin) {
+              areaMin = tempArea;
+              z = w > h ? h : w;
+            }
+
+            reslove(texture);
+          };
+        });
+      };
+
+      //load all textures as images
+      for (let index = 0; index < 6; index++) {
+        const loadedTexture = await loadTexture(index);
+        loadedTextures.push(loadedTexture);
+      }
+      const textureCubeCustom = loadedTextures.map(
+        (texture) =>
+          new THREE.MeshBasicMaterial({
+            map: texture,
+          })
+      );
+
+      //cuboid
       object = new THREE.Mesh(
-        new THREE.BoxGeometry(359, 111, 111),
+        new THREE.BoxGeometry(x, y, z),
         textureCubeCustom
       );
       object.position.set(0, 0, 0);
       object.name = "Cube";
       scene1.add(object);
 
-      // ---------------------------------------------------------------------
       // camera
-      // ---------------------------------------------------------------------
       const cameraOrtho = new THREE.OrthographicCamera(
         window.innerWidth / -2,
         window.innerWidth / 2,
@@ -259,13 +275,49 @@ function App() {
     }
   };
 
+  useEffect(() => console.log(textures), [textures]);
+
   return (
     <div className="App">
-      <div className="header">ManageArtworks </div>
+      <Modal open={openSnippet} onClose={handleCloseSnippet}>
+        <Face
+          img={textures[textures.length - 1]}
+          remove={() => {
+            setTextures((old) => old.slice(undefined, -2));
+            handleCloseSnippet();
+          }}
+          approve={() => handleCloseSnippet()}
+        />
+      </Modal>
+      <div
+        className="header"
+        style={{
+          display: "flex",
+          flexDirection: "row",
+          justifyContent: "space-between",
+        }}
+      >
+        <div>ManageArtworks</div>
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "row",
+          }}
+        >
+          <div>Faces Obtained- {textures.length} / 6</div>{" "}
+          <PreviewPopup
+            textures={textures}
+            removeTexture={removeTexture}
+            approveTexture={null}
+          />
+          <Button variant="contained" onClick={() => exportModel(textures)}>
+            Convert
+          </Button>
+        </div>
+      </div>
       <div className="webviewer" ref={viewer}></div>
-      <button onClick={exportModel}>Export glb</button>
       {/* <div className="webviewer" ref={viewer}></div> */}
-  </div>
+    </div>
   );
 }
 
