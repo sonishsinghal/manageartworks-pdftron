@@ -32,8 +32,7 @@ function App() {
     WebViewer(
       {
         path: "/webviewer/lib",
-        initialDoc:
-          "https://pdftron.s3.amazonaws.com/downloads/pl/demo-annotated.pdf",
+        initialDoc:"/assets/pdftron_using_guide.pdf",
         enableFilePicker: true, // enable FILE SYSTEM
       },
       viewer.current
